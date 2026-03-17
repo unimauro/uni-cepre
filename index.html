@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNI 2026 - Dashboard de Resultados</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a237e;
+            --primary-light: #3949ab;
+            --accent: #ff6f00;
+            --accent-light: #ffa726;
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --text: #212121;
+            --text-secondary: #757575;
+            --border: #e0e0e0;
+            --success: #2e7d32;
+            --cepre-color: #1565c0;
+            --admision-color: #e65100;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.3rem;
+        }
+
+        header p {
+            opacity: 0.85;
+            font-size: 0.95rem;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            background: var(--primary);
+            padding: 0 1rem;
+        }
+
+        .tab {
+            padding: 0.8rem 1.5rem;
+            cursor: pointer;
+            color: rgba(255,255,255,0.7);
+            border: none;
+            background: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: white; }
+        .tab.active {
+            color: white;
+            border-bottom-color: var(--accent-light);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem 1rem;
+        }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.2rem;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-top: 4px solid var(--primary);
+        }
+
+        .stat-card.cepre { border-top-color: var(--cepre-color); }
+        .stat-card.admision { border-top-color: var(--admision-color); }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-card.cepre .value { color: var(--cepre-color); }
+        .stat-card.admision .value { color: var(--admision-color); }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.3rem;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .chart-card h3 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .chart-card canvas {
+            max-height: 400px;
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .search-box {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 1.5rem;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--primary-light);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .results-table th {
+            background: var(--primary);
+            color: white;
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+
+        .results-table td {
+            padding: 0.5rem 0.8rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .results-table tr:hover td {
+            background: #e8eaf6;
+        }
+
+        .table-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-ingreso {
+            background: #e8f5e9;
+            color: var(--success);
+        }
+
+        .badge-no {
+            background: #fce4ec;
+            color: #c62828;
+        }
+
+        .top-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .top-table th {
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 0.6rem;
+            text-align: left;
+        }
+
+        .top-table td {
+            padding: 0.4rem 0.6rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rank {
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .compare-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .chart-grid { grid-template-columns: 1fr; }
+            .compare-row { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            header h1 { font-size: 1.3rem; }
+            .tab { padding: 0.6rem 0.8rem; font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>UNI 2026 - Dashboard de Resultados</h1>
+        <p>Examen de Admisión y CEPRE UNI &mdash; Proceso 2026-I</p>
+    </header>
+
+    <nav class="tabs">
+        <button class="tab active" onclick="showSection('resumen')">Resumen</button>
+        <button class="tab" onclick="showSection('admision')">Admisión</button>
+        <button class="tab" onclick="showSection('cepre')">CEPRE</button>
+        <button class="tab" onclick="showSection('comparativa')">Comparativa</button>
+        <button class="tab" onclick="showSection('buscador')">Buscador</button>
+    </nav>
+
+    <div class="container">
+        <!-- RESUMEN -->
+        <div id="resumen" class="section active">
+            <div class="loading" id="loading">Cargando datos...</div>
+            <div id="resumen-content" style="display:none">
+                <div class="stats-grid" id="resumen-stats"></div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3>Postulantes vs Ingresantes</h3>
+                        <canvas id="chart-resumen-bar"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Tasa de Ingreso por Proceso</h3>
+                        <canvas id="chart-resumen-tasa"></canvas>
+                    </div>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-card full-width">
+                        <h3>Top 10 Especialidades con Más Ingresantes (Admisión + CEPRE)</h3>
+                        <canvas id="chart-resumen-top-esp"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMISIÓN -->
+        <div id="admision" class="section">
+            <div class="stats-grid" id="admision-stats"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Distribución de Puntaje Final</h3>
+                    <canvas id="chart-adm-dist"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Promedios por Examen</h3>
+                    <canvas id="chart-adm-exams"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Ingresantes por Especialidad</h3>
+                    <canvas id="chart-adm-esp"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Postulantes por Modalidad</h3>
+                    <canvas id="chart-adm-mod"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card full-width">
+                    <h3>Top 10 Puntajes - Examen de Admisión</h3>
+                    <div class="table-wrapper">
+                        <table class="top-table" id="table-adm-top"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CEPRE -->
+        <div id="cepre" class="section">
+            <div class="stats-grid" id="cepre-stats"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Distribución de Puntaje Final</h3>
+                    <canvas id="chart-cepre-dist"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Ingresantes por Modalidad</h3>
+                    <canvas id="chart-cepre-mod"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card full-width">
+                    <h3>Ingresantes por Especialidad</h3>
+                    <canvas id="chart-cepre-esp"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card full-width">
+                    <h3>Top 10 Puntajes - CEPRE</h3>
+                    <div class="table-wrapper">
+                        <table class="top-table" id="table-cepre-top"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COMPARATIVA -->
+        <div id="comparativa" class="section">
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Distribución de Puntajes: Admisión vs CEPRE</h3>
+                    <canvas id="chart-comp-dist"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Puntaje Mínimo de Ingreso por Especialidad</h3>
+                    <canvas id="chart-comp-min"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card full-width">
+                    <h3>Ingresantes por Especialidad: Admisión vs CEPRE</h3>
+                    <canvas id="chart-comp-esp"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- BUSCADOR -->
+        <div id="buscador" class="section">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Buscar por código o nombre..." oninput="doSearch(this.value)">
+                <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-secondary)">
+                    Busca en ambos procesos (Admisión y CEPRE). Mínimo 3 caracteres.
+                </p>
+            </div>
+            <div class="table-wrapper" id="search-results" style="display:none">
+                <table class="results-table" id="search-table"></table>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>Datos obtenidos de <a href="https://puntajes.admision.uni.edu.pe/" target="_blank">puntajes.admision.uni.edu.pe</a> &mdash; Proceso 2026-I</p>
+        <p>Dashboard de uso informativo y educativo.</p>
+    </footer>
+
+    <script>
+    let admisionData = [];
+    let cepreData = [];
+
+    function showSection(id) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    function loadCSV(url) {
+        return new Promise((resolve, reject) => {
+            Papa.parse(url, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: r => resolve(r.data),
+                error: e => reject(e)
+            });
+        });
+    }
+
+    function groupBy(arr, key) {
+        const map = {};
+        arr.forEach(r => {
+            const k = r[key] || '(sin dato)';
+            if (!map[k]) map[k] = [];
+            map[k].push(r);
+        });
+        return map;
+    }
+
+    function avg(arr) {
+        if (!arr.length) return 0;
+        return arr.reduce((s, v) => s + v, 0) / arr.length;
+    }
+
+    function histogram(values, binSize) {
+        const bins = {};
+        values.forEach(v => {
+            const bin = Math.floor(v / binSize) * binSize;
+            bins[bin] = (bins[bin] || 0) + 1;
+        });
+        const sorted = Object.keys(bins).map(Number).sort((a, b) => a - b);
+        return { labels: sorted.map(b => `${b}-${b + binSize}`), values: sorted.map(b => bins[b]) };
+    }
+
+    const COLORS = [
+        '#1565c0','#e65100','#2e7d32','#6a1b9a','#c62828',
+        '#00838f','#ef6c00','#283593','#558b2f','#ad1457',
+        '#4527a0','#00695c','#bf360c','#1b5e20','#880e4f'
+    ];
+
+    function buildChart(id, type, data, options = {}) {
+        const ctx = document.getElementById(id);
+        if (!ctx) return;
+        return new Chart(ctx, { type, data, options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: options.legend !== false, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+            scales: options.scales || {},
+            ...options.extra
+        }});
+    }
+
+    function renderResumen() {
+        const admTotal = admisionData.length;
+        const admIngresantes = admisionData.filter(r => r.especialidad_ingreso).length;
+        const cepreTotal = cepreData.length;
+        const cepreIngresantes = cepreData.filter(r => r.especialidad).length;
+
+        document.getElementById('resumen-stats').innerHTML = `
+            <div class="stat-card admision"><div class="value">${admTotal.toLocaleString()}</div><div class="label">Postulantes Admisión</div></div>
+            <div class="stat-card admision"><div class="value">${admIngresantes}</div><div class="label">Ingresantes Admisión</div></div>
+            <div class="stat-card cepre"><div class="value">${cepreTotal.toLocaleString()}</div><div class="label">Postulantes CEPRE</div></div>
+            <div class="stat-card cepre"><div class="value">${cepreIngresantes}</div><div class="label">Ingresantes CEPRE</div></div>
+            <div class="stat-card"><div class="value">${(admTotal + cepreTotal).toLocaleString()}</div><div class="label">Total General</div></div>
+            <div class="stat-card"><div class="value">${admIngresantes + cepreIngresantes}</div><div class="label">Total Ingresantes</div></div>
+        `;
+
+        buildChart('chart-resumen-bar', 'bar', {
+            labels: ['Admisión', 'CEPRE'],
+            datasets: [
+                { label: 'Postulantes', data: [admTotal, cepreTotal], backgroundColor: ['#1565c0','#1565c0'] },
+                { label: 'Ingresantes', data: [admIngresantes, cepreIngresantes], backgroundColor: ['#e65100','#e65100'] }
+            ]
+        }, { scales: { y: { beginAtZero: true } } });
+
+        const admTasa = ((admIngresantes / admTotal) * 100).toFixed(1);
+        const cepreTasa = ((cepreIngresantes / cepreTotal) * 100).toFixed(1);
+        buildChart('chart-resumen-tasa', 'doughnut', {
+            labels: [`Admisión (${admTasa}%)`, `CEPRE (${cepreTasa}%)`],
+            datasets: [{ data: [admTasa, cepreTasa], backgroundColor: ['#e65100','#1565c0'] }]
+        }, { legend: true });
+
+        // Top especialidades combined
+        const espMap = {};
+        admisionData.filter(r => r.especialidad_ingreso).forEach(r => {
+            espMap[r.especialidad_ingreso] = (espMap[r.especialidad_ingreso] || { adm: 0, cepre: 0 });
+            espMap[r.especialidad_ingreso].adm++;
+        });
+        cepreData.filter(r => r.especialidad).forEach(r => {
+            espMap[r.especialidad] = (espMap[r.especialidad] || { adm: 0, cepre: 0 });
+            espMap[r.especialidad].cepre++;
+        });
+        const topEsp = Object.entries(espMap)
+            .sort((a, b) => (b[1].adm + b[1].cepre) - (a[1].adm + a[1].cepre))
+            .slice(0, 10);
+
+        buildChart('chart-resumen-top-esp', 'bar', {
+            labels: topEsp.map(e => e[0].length > 30 ? e[0].substring(0, 28) + '...' : e[0]),
+            datasets: [
+                { label: 'Admisión', data: topEsp.map(e => e[1].adm), backgroundColor: '#e65100' },
+                { label: 'CEPRE', data: topEsp.map(e => e[1].cepre), backgroundColor: '#1565c0' }
+            ]
+        }, { scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true } } });
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('resumen-content').style.display = 'block';
+    }
+
+    function renderAdmision() {
+        const total = admisionData.length;
+        const ingresantes = admisionData.filter(r => r.especialidad_ingreso).length;
+        const puntajes = admisionData.map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0);
+        const maxP = Math.max(...puntajes);
+        const avgP = avg(puntajes).toFixed(1);
+
+        document.getElementById('admision-stats').innerHTML = `
+            <div class="stat-card admision"><div class="value">${total.toLocaleString()}</div><div class="label">Postulantes</div></div>
+            <div class="stat-card admision"><div class="value">${ingresantes}</div><div class="label">Ingresantes</div></div>
+            <div class="stat-card admision"><div class="value">${((ingresantes/total)*100).toFixed(1)}%</div><div class="label">Tasa de Ingreso</div></div>
+            <div class="stat-card admision"><div class="value">${maxP.toFixed(1)}</div><div class="label">Puntaje Máximo</div></div>
+            <div class="stat-card admision"><div class="value">${avgP}</div><div class="label">Puntaje Promedio</div></div>
+        `;
+
+        // Distribution
+        const hist = histogram(puntajes, 100);
+        buildChart('chart-adm-dist', 'bar', {
+            labels: hist.labels,
+            datasets: [{ label: 'Postulantes', data: hist.values, backgroundColor: '#e65100' }]
+        }, { scales: { y: { beginAtZero: true } }, legend: false });
+
+        // Exam averages
+        const exams = ['puntaje_aptitud_vocacional','puntaje_aptitud_academica','puntaje_matematica','puntaje_fisica_quimica'];
+        const examLabels = ['Apt. Vocacional','Apt. Académica','Matemática','Física/Química'];
+        const examAvgs = exams.map(e => {
+            const vals = admisionData.map(r => parseFloat(r[e])).filter(v => !isNaN(v));
+            return vals.length ? avg(vals) : 0;
+        });
+        const examMax = exams.map(e => {
+            const vals = admisionData.map(r => parseFloat(r[e])).filter(v => !isNaN(v));
+            return vals.length ? Math.max(...vals) : 0;
+        });
+
+        buildChart('chart-adm-exams', 'bar', {
+            labels: examLabels,
+            datasets: [
+                { label: 'Promedio', data: examAvgs.map(v => v.toFixed(1)), backgroundColor: '#e65100' },
+                { label: 'Máximo', data: examMax.map(v => v.toFixed(1)), backgroundColor: '#ff8f00' }
+            ]
+        }, { scales: { y: { beginAtZero: true } } });
+
+        // By especialidad
+        const espGroup = groupBy(admisionData.filter(r => r.especialidad_ingreso), 'especialidad_ingreso');
+        const espSorted = Object.entries(espGroup).sort((a, b) => b[1].length - a[1].length).slice(0, 15);
+        buildChart('chart-adm-esp', 'bar', {
+            labels: espSorted.map(e => e[0].length > 25 ? e[0].substring(0, 23) + '...' : e[0]),
+            datasets: [{ label: 'Ingresantes', data: espSorted.map(e => e[1].length), backgroundColor: COLORS }]
+        }, { scales: { x: { ticks: { font: { size: 9 } } }, y: { beginAtZero: true } }, legend: false });
+
+        // By modalidad
+        const modGroup = groupBy(admisionData, 'modalidad');
+        const modSorted = Object.entries(modGroup).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
+        buildChart('chart-adm-mod', 'pie', {
+            labels: modSorted.map(e => e[0].length > 30 ? e[0].substring(0, 28) + '...' : e[0]),
+            datasets: [{ data: modSorted.map(e => e[1].length), backgroundColor: COLORS }]
+        }, { legend: true });
+
+        // Top 10 table
+        const top10 = admisionData
+            .filter(r => r.puntaje_final)
+            .sort((a, b) => parseFloat(b.puntaje_final) - parseFloat(a.puntaje_final))
+            .slice(0, 10);
+
+        document.getElementById('table-adm-top').innerHTML = `
+            <thead><tr><th>#</th><th>Código</th><th>Nombre</th><th>Especialidad</th><th>Mat</th><th>Fis/Qui</th><th>Acad</th><th>Final</th></tr></thead>
+            <tbody>${top10.map((r, i) => `<tr>
+                <td class="rank">${i + 1}</td>
+                <td>${r.codigo}</td>
+                <td>${r.nombre_completo}</td>
+                <td>${r.especialidad_ingreso || '-'}</td>
+                <td>${r.puntaje_matematica || '-'}</td>
+                <td>${r.puntaje_fisica_quimica || '-'}</td>
+                <td>${r.puntaje_aptitud_academica || '-'}</td>
+                <td><strong>${parseFloat(r.puntaje_final).toFixed(1)}</strong></td>
+            </tr>`).join('')}</tbody>
+        `;
+    }
+
+    function renderCepre() {
+        const total = cepreData.length;
+        const ingresantes = cepreData.filter(r => r.especialidad).length;
+        const puntajes = cepreData.map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0);
+        const maxP = Math.max(...puntajes);
+        const avgP = avg(puntajes).toFixed(1);
+
+        document.getElementById('cepre-stats').innerHTML = `
+            <div class="stat-card cepre"><div class="value">${total.toLocaleString()}</div><div class="label">Postulantes</div></div>
+            <div class="stat-card cepre"><div class="value">${ingresantes}</div><div class="label">Ingresantes</div></div>
+            <div class="stat-card cepre"><div class="value">${((ingresantes/total)*100).toFixed(1)}%</div><div class="label">Tasa de Ingreso</div></div>
+            <div class="stat-card cepre"><div class="value">${maxP.toFixed(1)}</div><div class="label">Puntaje Máximo</div></div>
+            <div class="stat-card cepre"><div class="value">${avgP}</div><div class="label">Puntaje Promedio</div></div>
+        `;
+
+        // Distribution
+        const hist = histogram(puntajes, 100);
+        buildChart('chart-cepre-dist', 'bar', {
+            labels: hist.labels,
+            datasets: [{ label: 'Postulantes', data: hist.values, backgroundColor: '#1565c0' }]
+        }, { scales: { y: { beginAtZero: true } }, legend: false });
+
+        // By modalidad
+        const modGroup = groupBy(cepreData, 'modalidad');
+        const modSorted = Object.entries(modGroup).sort((a, b) => b[1].length - a[1].length);
+        buildChart('chart-cepre-mod', 'pie', {
+            labels: modSorted.map(e => e[0].length > 35 ? e[0].substring(0, 33) + '...' : e[0]),
+            datasets: [{ data: modSorted.map(e => e[1].length), backgroundColor: COLORS }]
+        }, { legend: true });
+
+        // By especialidad
+        const espGroup = groupBy(cepreData.filter(r => r.especialidad), 'especialidad');
+        const espSorted = Object.entries(espGroup).sort((a, b) => b[1].length - a[1].length).slice(0, 15);
+        buildChart('chart-cepre-esp', 'bar', {
+            labels: espSorted.map(e => e[0].length > 25 ? e[0].substring(0, 23) + '...' : e[0]),
+            datasets: [{ label: 'Ingresantes', data: espSorted.map(e => e[1].length), backgroundColor: COLORS }]
+        }, { scales: { x: { ticks: { font: { size: 9 } } }, y: { beginAtZero: true } }, legend: false });
+
+        // Top 10
+        const top10 = cepreData
+            .filter(r => r.puntaje_final)
+            .sort((a, b) => parseFloat(b.puntaje_final) - parseFloat(a.puntaje_final))
+            .slice(0, 10);
+
+        document.getElementById('table-cepre-top').innerHTML = `
+            <thead><tr><th>#</th><th>Código</th><th>Nombre</th><th>Modalidad</th><th>Especialidad</th><th>Puntaje</th></tr></thead>
+            <tbody>${top10.map((r, i) => `<tr>
+                <td class="rank">${i + 1}</td>
+                <td>${r.codigo}</td>
+                <td>${r.nombre_completo}</td>
+                <td>${r.modalidad || '-'}</td>
+                <td>${r.especialidad || '-'}</td>
+                <td><strong>${parseFloat(r.puntaje_final).toFixed(1)}</strong></td>
+            </tr>`).join('')}</tbody>
+        `;
+    }
+
+    function renderComparativa() {
+        // Distribution comparison
+        const admPuntajes = admisionData.map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0);
+        const ceprePuntajes = cepreData.map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0);
+
+        const allBins = new Set();
+        const binSize = 100;
+        [...admPuntajes, ...ceprePuntajes].forEach(v => allBins.add(Math.floor(v / binSize) * binSize));
+        const sortedBins = [...allBins].sort((a, b) => a - b);
+
+        const admHist = {};
+        const cepreHist = {};
+        admPuntajes.forEach(v => { const b = Math.floor(v / binSize) * binSize; admHist[b] = (admHist[b] || 0) + 1; });
+        ceprePuntajes.forEach(v => { const b = Math.floor(v / binSize) * binSize; cepreHist[b] = (cepreHist[b] || 0) + 1; });
+
+        buildChart('chart-comp-dist', 'bar', {
+            labels: sortedBins.map(b => `${b}-${b + binSize}`),
+            datasets: [
+                { label: 'Admisión', data: sortedBins.map(b => admHist[b] || 0), backgroundColor: 'rgba(230,81,0,0.6)', borderColor: '#e65100', borderWidth: 1 },
+                { label: 'CEPRE', data: sortedBins.map(b => cepreHist[b] || 0), backgroundColor: 'rgba(21,101,192,0.6)', borderColor: '#1565c0', borderWidth: 1 }
+            ]
+        }, { scales: { y: { beginAtZero: true } } });
+
+        // Min score by especialidad comparison
+        const admEsp = groupBy(admisionData.filter(r => r.especialidad_ingreso), 'especialidad_ingreso');
+        const cepreEsp = groupBy(cepreData.filter(r => r.especialidad), 'especialidad');
+
+        const allEsp = new Set([...Object.keys(admEsp), ...Object.keys(cepreEsp)]);
+        const espData = [...allEsp].map(esp => {
+            const admMin = admEsp[esp] ? Math.min(...admEsp[esp].map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0)) : null;
+            const cepreMin = cepreEsp[esp] ? Math.min(...cepreEsp[esp].map(r => parseFloat(r.puntaje_final)).filter(v => !isNaN(v) && v > 0)) : null;
+            return { esp, admMin: admMin === Infinity ? null : admMin, cepreMin: cepreMin === Infinity ? null : cepreMin };
+        }).filter(d => d.admMin || d.cepreMin).sort((a, b) => (b.admMin || 0) - (a.admMin || 0)).slice(0, 15);
+
+        buildChart('chart-comp-min', 'bar', {
+            labels: espData.map(d => d.esp.length > 25 ? d.esp.substring(0, 23) + '...' : d.esp),
+            datasets: [
+                { label: 'Admisión (mín)', data: espData.map(d => d.admMin), backgroundColor: '#e65100' },
+                { label: 'CEPRE (mín)', data: espData.map(d => d.cepreMin), backgroundColor: '#1565c0' }
+            ]
+        }, { scales: { x: { ticks: { font: { size: 9 } } }, y: { beginAtZero: true } } });
+
+        // Ingresantes comparison
+        const espCompare = [...allEsp].map(esp => ({
+            esp,
+            adm: admEsp[esp] ? admEsp[esp].length : 0,
+            cepre: cepreEsp[esp] ? cepreEsp[esp].length : 0
+        })).sort((a, b) => (b.adm + b.cepre) - (a.adm + a.cepre)).slice(0, 15);
+
+        buildChart('chart-comp-esp', 'bar', {
+            labels: espCompare.map(d => d.esp.length > 25 ? d.esp.substring(0, 23) + '...' : d.esp),
+            datasets: [
+                { label: 'Admisión', data: espCompare.map(d => d.adm), backgroundColor: '#e65100' },
+                { label: 'CEPRE', data: espCompare.map(d => d.cepre), backgroundColor: '#1565c0' }
+            ]
+        }, { scales: { x: { ticks: { font: { size: 9 } } }, y: { beginAtZero: true } } });
+    }
+
+    function doSearch(query) {
+        if (query.length < 3) {
+            document.getElementById('search-results').style.display = 'none';
+            return;
+        }
+
+        const q = query.toUpperCase();
+        const results = [];
+
+        admisionData.forEach(r => {
+            if ((r.codigo && r.codigo.toUpperCase().includes(q)) ||
+                (r.nombre_completo && r.nombre_completo.toUpperCase().includes(q))) {
+                results.push({ ...r, fuente: 'Admisión', especialidad: r.especialidad_ingreso });
+            }
+        });
+
+        cepreData.forEach(r => {
+            if ((r.codigo && r.codigo.toUpperCase().includes(q)) ||
+                (r.nombre_completo && r.nombre_completo.toUpperCase().includes(q))) {
+                results.push({ ...r, fuente: 'CEPRE' });
+            }
+        });
+
+        const limited = results.slice(0, 100);
+
+        document.getElementById('search-results').style.display = 'block';
+        document.getElementById('search-table').innerHTML = `
+            <thead><tr><th>Fuente</th><th>Código</th><th>Nombre</th><th>Modalidad</th><th>Especialidad</th><th>Puntaje Final</th><th>Estado</th></tr></thead>
+            <tbody>${limited.map(r => `<tr>
+                <td><span class="badge" style="background:${r.fuente === 'Admisión' ? '#fff3e0' : '#e3f2fd'};color:${r.fuente === 'Admisión' ? '#e65100' : '#1565c0'}">${r.fuente}</span></td>
+                <td>${r.codigo}</td>
+                <td>${r.nombre_completo}</td>
+                <td>${r.modalidad || '-'}</td>
+                <td>${r.especialidad || '-'}</td>
+                <td>${r.puntaje_final || '-'}</td>
+                <td>${r.especialidad ? '<span class="badge badge-ingreso">INGRESÓ</span>' : '<span class="badge badge-no">NO INGRESÓ</span>'}</td>
+            </tr>`).join('')}</tbody>
+        `;
+
+        if (results.length > 100) {
+            document.getElementById('search-table').innerHTML += `<tfoot><tr><td colspan="7" style="text-align:center;padding:0.8rem;color:var(--text-secondary)">Mostrando 100 de ${results.length} resultados. Refina tu búsqueda.</td></tr></tfoot>`;
+        }
+
+        if (!results.length) {
+            document.getElementById('search-table').innerHTML = `<tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary)">No se encontraron resultados para "${query}"</td></tr></tbody>`;
+        }
+    }
+
+    async function init() {
+        try {
+            [admisionData, cepreData] = await Promise.all([
+                loadCSV('resultados_admision.csv'),
+                loadCSV('resultados_uni.csv')
+            ]);
+
+            renderResumen();
+            renderAdmision();
+            renderCepre();
+            renderComparativa();
+        } catch (e) {
+            document.getElementById('loading').textContent = 'Error cargando datos: ' + e.message;
+        }
+    }
+
+    init();
+    </script>
+</body>
+</html>
